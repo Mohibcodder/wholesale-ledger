@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic'; // <-- Yeh line add karein
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
