@@ -1,9 +1,13 @@
 'use client';
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 
-export default function CustomerLedgerPage({ params }) {
-  const { cityName, customerId } = use(params);
+export default function CustomerLedgerPage() {
+  const params = useParams();
+  const cityName = params?.cityName ? decodeURIComponent(params.cityName) : '';
+  const customerId = params?.customerId;
+
   const [customer, setCustomer] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -15,6 +19,7 @@ export default function CustomerLedgerPage({ params }) {
   const [description, setDescription] = useState('');
 
   const fetchData = async () => {
+    if (!customerId || !cityName) return;
     try {
       // Fetch Customer Details
       const custRes = await fetch(`/api/customers?city=${cityName}`);
@@ -39,7 +44,7 @@ export default function CustomerLedgerPage({ params }) {
 
   useEffect(() => {
     fetchData();
-  }, [customerId]);
+  }, [customerId, cityName]);
 
   const handleAddTransaction = async (e) => {
     e.preventDefault();

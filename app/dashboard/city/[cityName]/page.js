@@ -1,14 +1,19 @@
 'use client';
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 
-export default function CityCustomersPage({ params }) {
-  const { cityName } = use(params);
+export default function CityCustomersPage() {
+  const params = useParams();
+  const cityName = params?.cityName ? decodeURIComponent(params.cityName) : '';
+  
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
+    if (!cityName) return;
+    
     async function fetchCityCustomers() {
       try {
         const res = await fetch(`/api/customers?city=${cityName}`);
