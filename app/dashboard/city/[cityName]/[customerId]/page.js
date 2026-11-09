@@ -1,13 +1,11 @@
 'use client';
-export const dynamic = 'force-dynamic'; // <-- Yeh line add karein
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
 
-export default function CustomerLedgerPage() {
-  const params = useParams();
-  const cityName = params?.cityName ? decodeURIComponent(params.cityName) : '';
-  const customerId = params?.customerId;
+export default function CustomerLedgerPage({ params }) {
+  const resolvedParams = use(params);
+  const cityName = resolvedParams?.cityName ? decodeURIComponent(resolvedParams.cityName) : '';
+  const customerId = resolvedParams?.customerId;
 
   const [customer, setCustomer] = useState(null);
   const [transactions, setTransactions] = useState([]);
