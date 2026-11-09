@@ -1,24 +1,34 @@
 
 import { Suspense } from 'react';
-import CityCustomersClient from './CityCustomersClient';
+import { connection } from 'next/server';
+import CustomerLedgerClient from './CityCustomersClient';
 
-async function CityCustomersContent({ params }) {
+async function CustomerLedgerContent({ params }) {
+  await connection();
+
   const resolvedParams = await params;
-  const cityName = resolvedParams?.cityName || '';
 
-  return <CityCustomersClient cityName={cityName} />;
+  const cityName = resolvedParams?.cityName || '';
+  const customerId = resolvedParams?.customerId || '';
+
+  return (
+    <CustomerLedgerClient
+      cityName={cityName}
+      customerId={customerId}
+    />
+  );
 }
 
-export default function CityCustomersPage({ params }) {
+export default function CustomerLedgerPage({ params }) {
   return (
     <Suspense
       fallback={
         <div className="min-h-screen bg-slate-900 text-white p-8">
-          Loading City Directory...
+          Loading Customer Ledger...
         </div>
       }
     >
-      <CityCustomersContent params={params} />
+      <CustomerLedgerContent params={params} />
     </Suspense>
   );
 }
