@@ -1,34 +1,11 @@
 
-import { Suspense } from 'react';
-import { connection } from 'next/server';
-import CustomerLedgerClient from './CityCustomersClient';
+import CityCustomersClient from './CityCustomersClient';
 
-async function CustomerLedgerContent({ params }) {
-  await connection();
+export const dynamic = 'force-dynamic';
 
+export default async function CityCustomersPage({ params }) {
   const resolvedParams = await params;
-
   const cityName = resolvedParams?.cityName || '';
-  const customerId = resolvedParams?.customerId || '';
 
-  return (
-    <CustomerLedgerClient
-      cityName={cityName}
-      customerId={customerId}
-    />
-  );
-}
-
-export default function CustomerLedgerPage({ params }) {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-slate-900 text-white p-8">
-          Loading Customer Ledger...
-        </div>
-      }
-    >
-      <CustomerLedgerContent params={params} />
-    </Suspense>
-  );
+  return <CityCustomersClient cityName={cityName} />;
 }
