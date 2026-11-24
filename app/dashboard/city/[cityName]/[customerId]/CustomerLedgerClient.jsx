@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -9,11 +8,13 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal State
+  // Modal State (Add / Edit)
   const [showModal, setShowModal] = useState(false);
+  const [editingTx, setEditingTx] = useState(null);
   const [entryType, setEntryType] = useState('CREDIT');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!customerId || !cityName) {
@@ -22,6 +23,8 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
     }
 
     try {
+      setLoading(true);
+
       // Fetch Customer Details
       const custRes = await fetch(
         `/api/customers?city=${encodeURIComponent(cityName)}`
@@ -37,7 +40,6 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
         const found = custData.data.find(
           (c) => String(c._id) === String(customerId)
         );
-
         setCustomer(found || null);
       }
 
@@ -66,12 +68,58 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
     fetchData();
   }, [fetchData]);
 
-  const handleAddTransaction = async (e) => {
-    e.preventDefault();
+  const openAddModal = (type) => {
+    setEditingTx(null);
+    setEntryType(type);
+    setAmount('');
+    setDescription('');
+    setShowModal(true);
+  };
+
+  const openEditModal = (tx) => {
+    setEditingTx(tx);
+    setEntryType(tx.type);
+    setAmount(tx.amount);
+    setDescription(tx.description || '');
+    setShowModal(true);
+  };
+
+  const handleDeleteTransaction = async (txId) => {
+    const confirmed = window.confirm(
+      'Kya aap is entry ko delete karna chahte hain? Customer ka balance auto-update ho jayega.'
+    );
+    if (!confirmed) return;
 
     try {
-      const res = await fetch('/api/transactions', {
-        method: 'POST',
+      const res = await fetch(`/api/transactions/${txId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        await fetchData();
+      } else {
+        alert(data.error || 'Failed to delete entry');
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      alert('Something went wrong while deleting.');
+    }
+  };
+
+  const handleSaveTransaction = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      const url = editingTx
+        ? `/api/transactions/${editingTx._id}`
+        : '/api/transactions';
+      const method = editingTx ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
         },
@@ -87,6 +135,7 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
 
       if (data.success) {
         setShowModal(false);
+        setEditingTx(null);
         setAmount('');
         setDescription('');
 
@@ -97,6 +146,8 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
     } catch (err) {
       console.error('Transaction error:', err);
       alert('Something went wrong. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -112,9 +163,7 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
     return (
       <div className="min-h-screen bg-slate-900 text-white p-8">
         <div className="max-w-5xl mx-auto">
-          <p className="text-red-400 mb-4">
-            Customer not found.
-          </p>
+          <p className="text-red-400 mb-4">Customer not found.</p>
 
           <Link
             href={`/dashboard/city/${encodeURIComponent(cityName)}`}
@@ -130,7 +179,6 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
   return (
     <div className="min-h-screen bg-slate-900 text-white p-6">
       <div className="max-w-5xl mx-auto">
-
         <Link
           href={`/dashboard/city/${encodeURIComponent(cityName)}`}
           className="text-slate-400 hover:text-emerald-400 text-sm font-semibold mb-4 inline-block"
@@ -164,21 +212,15 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
         {/* Action Buttons */}
         <div className="flex gap-4 mb-6">
           <button
-            onClick={() => {
-              setEntryType('CREDIT');
-              setShowModal(true);
-            }}
-            className="flex-1 bg-red-600/20 hover:bg-red-600/30 border border-red-500/50 text-red-300 font-semibold py-3 rounded-xl transition"
+            onClick={() => openAddModal('CREDIT')}
+            className="flex-1 bg-red-600/20 hover:bg-red-600/30 border border-red-500/50 text-red-300 font-semibold py-3 rounded-xl transition cursor-pointer"
           >
             + Maal Dia (Credit / Udhaar)
           </button>
 
           <button
-            onClick={() => {
-              setEntryType('PAYMENT');
-              setShowModal(true);
-            }}
-            className="flex-1 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/50 text-emerald-300 font-semibold py-3 rounded-xl transition"
+            onClick={() => openAddModal('PAYMENT')}
+            className="flex-1 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/50 text-emerald-300 font-semibold py-3 rounded-xl transition cursor-pointer"
           >
             - Payment Wasool Hui (Cash In)
           </button>
@@ -194,6 +236,7 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
                   <th className="p-4">Description</th>
                   <th className="p-4 text-right">Maal Dia (Debit)</th>
                   <th className="p-4 text-right">Wasooli (Credit)</th>
+                  <th className="p-4 text-center">Actions</th>
                 </tr>
               </thead>
 
@@ -201,7 +244,7 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
                 {transactions.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="4"
+                      colSpan="5"
                       className="p-6 text-center text-slate-400"
                     >
                       No transactions recorded yet.
@@ -209,10 +252,7 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
                   </tr>
                 ) : (
                   transactions.map((tx) => (
-                    <tr
-                      key={tx._id}
-                      className="hover:bg-slate-700"
-                    >
+                    <tr key={tx._id} className="hover:bg-slate-700/60">
                       <td className="p-4 text-slate-300">
                         {new Date(tx.date).toLocaleDateString('en-PK', {
                           day: 'numeric',
@@ -236,6 +276,21 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
                           ? `Rs. ${Number(tx.amount).toLocaleString()}`
                           : '-'}
                       </td>
+
+                      <td className="p-4 text-center space-x-2 whitespace-nowrap">
+                        <button
+                          onClick={() => openEditModal(tx)}
+                          className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded text-xs font-semibold cursor-pointer"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTransaction(tx._id)}
+                          className="px-2.5 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40 rounded text-xs font-semibold cursor-pointer"
+                        >
+                          Delete
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -244,21 +299,35 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
           </div>
         </div>
 
-        {/* Add Entry Modal */}
+        {/* Add / Edit Entry Modal */}
         {showModal && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-md p-6 shadow-2xl">
-
               <h3 className="text-xl font-bold mb-4 text-emerald-400">
-                {entryType === 'CREDIT'
+                {editingTx
+                  ? entryType === 'CREDIT'
+                    ? 'Edit Credit (Maal Dia)'
+                    : 'Edit Payment (Wasooli)'
+                  : entryType === 'CREDIT'
                   ? 'Add Credit (Maal Dia)'
                   : 'Record Payment (Wasooli)'}
               </h3>
 
-              <form
-                onSubmit={handleAddTransaction}
-                className="space-y-4"
-              >
+              <form onSubmit={handleSaveTransaction} className="space-y-4">
+                <div>
+                  <label className="block text-sm mb-1 text-slate-300">
+                    Entry Type
+                  </label>
+                  <select
+                    value={entryType}
+                    onChange={(e) => setEntryType(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded p-2.5 text-white outline-none focus:border-emerald-500"
+                  >
+                    <option value="CREDIT">Maal Dia (Credit / Udhaar)</option>
+                    <option value="PAYMENT">Payment Wasool Hui (Cash In)</option>
+                  </select>
+                </div>
+
                 <div>
                   <label className="block text-sm mb-1 text-slate-300">
                     Amount (Rs.)
@@ -292,24 +361,31 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
                 <div className="flex justify-end space-x-3 mt-6">
                   <button
                     type="button"
-                    onClick={() => setShowModal(false)}
-                    className="px-4 py-2 bg-slate-700 rounded text-slate-200"
+                    onClick={() => {
+                      setShowModal(false);
+                      setEditingTx(null);
+                    }}
+                    className="px-4 py-2 bg-slate-700 rounded text-slate-200 cursor-pointer"
                   >
                     Cancel
                   </button>
 
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 font-semibold rounded text-white"
+                    disabled={submitting}
+                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 font-semibold rounded text-white cursor-pointer"
                   >
-                    Save Entry
+                    {submitting
+                      ? 'Saving...'
+                      : editingTx
+                      ? 'Update Entry'
+                      : 'Save Entry'}
                   </button>
                 </div>
               </form>
             </div>
           </div>
         )}
-
       </div>
     </div>
   );
