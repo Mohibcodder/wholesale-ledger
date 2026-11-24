@@ -65,6 +65,9 @@ const PAKISTAN_CITIES = [
   'Other',
 ];
 
+const sanitizePkPhone = (value = '') =>
+  String(value).replace(/\D/g, '').slice(0, 11);
+
 export default function DashboardPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
@@ -107,7 +110,7 @@ export default function DashboardPage() {
     setEditingCustomer(cust);
     setFormData({
       name: cust.name,
-      number: cust.number,
+      number: sanitizePkPhone(cust.number),
       city: cust.city,
       address: cust.address,
       currentBalance: cust.currentBalance || 0,
@@ -138,6 +141,13 @@ export default function DashboardPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const cleanPhone = sanitizePkPhone(formData.number);
+    if (!/^03\d{9}$/.test(cleanPhone)) {
+      alert('Please enter a valid 11-digit Pakistani mobile number (e.g. 03214190776).');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -147,7 +157,10 @@ export default function DashboardPage() {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          number: cleanPhone,
+        }),
       });
 
       const data = await res.json();
@@ -323,15 +336,25 @@ export default function DashboardPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm mb-1 text-slate-300">Phone Number</label>
+                    <label className="block text-sm mb-1 text-slate-300">
+                      Phone Number (11 Digits)
+                    </label>
                     <input
-                      type="text"
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="03[0-9]{9}"
+                      maxLength={11}
                       required
                       value={formData.number}
-                      onChange={(e) => setFormData({ ...formData, number: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded p-2.5 text-white focus:border-emerald-500 outline-none"
-                      placeholder="0300-1234567"
+                      onChange={(e) =>
+                        setFormData({ ...formData, number: sanitizePkPhone(e.target.value) })
+                      }
+                      className="w-full bg-slate-900 border border-slate-700 rounded p-2.5 text-white focus:border-emerald-500 outline-none font-mono"
+                      placeholder="03214190776"
                     />
+                    <p className="text-xs text-slate-400 mt-1">
+                      {formData.number.length}/11 digits
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm mb-1 text-slate-300">Select City</label>

@@ -3,6 +3,41 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 
+function formatPhoneForWhatsApp(rawPhone = '') {
+  const digits = String(rawPhone).replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('92')) return digits;
+  if (digits.startsWith('0')) return `92${digits.slice(1)}`;
+  return `92${digits}`;
+}
+
+function buildWhatsAppUrl({
+  phone,
+  customerName,
+  actionLabel,
+  type,
+  amount,
+  description,
+  newBalance,
+}) {
+  const formattedPhone = formatPhoneForWhatsApp(phone);
+  const typeLabel =
+    type === 'CREDIT' ? 'Maal Dia (Credit)' : 'Payment Wasool (Cash In)';
+
+  const text = [
+    `Assalam-o-Alaikum ${customerName},`,
+    `${actionLabel}:`,
+    `• Type: ${typeLabel}`,
+    `• Amount: Rs. ${Number(amount).toLocaleString()}`,
+    description ? `• Note: ${description}` : null,
+    `•Total Balance: Rs. ${Number(newBalance ?? 0).toLocaleString()}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return `https://wa.me/${formattedPhone}?text=${encodeURIComponent(text)}`;
+}
+
 export default function CustomerLedgerClient({ cityName, customerId }) {
   const [customer, setCustomer] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -16,14 +51,19 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // One-click WhatsApp link state
+  const [lastWhatsApp, setLastWhatsApp] = useState(null);
+
   const fetchData = useCallback(async () => {
     if (!customerId || !cityName) {
       setLoading(false);
-      return;
+      return null;
     }
 
     try {
       setLoading(true);
+
+      let latestCustomer = null;
 
       // Fetch Customer Details
       const custRes = await fetch(
@@ -40,7 +80,8 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
         const found = custData.data.find(
           (c) => String(c._id) === String(customerId)
         );
-        setCustomer(found || null);
+        latestCustomer = found || null;
+        setCustomer(latestCustomer);
       }
 
       // Fetch Transactions
@@ -57,8 +98,11 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
       if (txData.success) {
         setTransactions(txData.data || []);
       }
+
+      return latestCustomer;
     } catch (err) {
       console.error('Ledger fetch error:', err);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -98,6 +142,7 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
       const data = await res.json();
 
       if (data.success) {
+        setLastWhatsApp(null);
         await fetchData();
       } else {
         alert(data.error || 'Failed to delete entry');
@@ -118,6 +163,11 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
         : '/api/transactions';
       const method = editingTx ? 'PUT' : 'POST';
 
+      const savedAmount = Number(amount);
+      const savedType = entryType;
+      const savedDesc = description;
+      const wasEditing = Boolean(editingTx);
+
       const res = await fetch(url, {
         method,
         headers: {
@@ -125,9 +175,9 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
         },
         body: JSON.stringify({
           customerId,
-          type: entryType,
-          amount: Number(amount),
-          description,
+          type: savedType,
+          amount: savedAmount,
+          description: savedDesc,
         }),
       });
 
@@ -139,7 +189,25 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
         setAmount('');
         setDescription('');
 
-        await fetchData();
+        const updatedCustomer = await fetchData();
+        const targetCustomer = updatedCustomer || customer;
+
+        if (targetCustomer?.number) {
+          setLastWhatsApp({
+            customerName: targetCustomer.name,
+            url: buildWhatsAppUrl({
+              phone: targetCustomer.number,
+              customerName: targetCustomer.name,
+              actionLabel: wasEditing
+                ? 'Entry update ki gayi hai'
+                : 'Nayi entry add hui hai',
+              type: savedType,
+              amount: savedAmount,
+              description: savedDesc,
+              newBalance: targetCustomer.currentBalance ?? 0,
+            }),
+          });
+        }
       } else {
         alert(data.error || 'Failed to record entry');
       }
@@ -151,7 +219,7 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
     }
   };
 
-  if (loading) {
+  if (loading && !customer) {
     return (
       <div className="p-8 text-white bg-slate-900 min-h-screen">
         Loading Ledger...
@@ -208,6 +276,33 @@ export default function CustomerLedgerClient({ cityName, customerId }) {
             </p>
           </div>
         </div>
+
+        {/* One-Click WhatsApp Share Banner */}
+        {lastWhatsApp && (
+          <div className="mb-6 bg-emerald-950/50 border border-emerald-500/40 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <p className="text-sm text-emerald-200">
+              Ledger save ho gaya!{' '}
+              <span className="font-semibold">{lastWhatsApp.customerName}</span>{' '}
+              ko WhatsApp message bhejein:
+            </p>
+            <div className="flex items-center gap-2">
+              <a
+                href={lastWhatsApp.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
+              >
+                Send on WhatsApp
+              </a>
+              <button
+                onClick={() => setLastWhatsApp(null)}
+                className="text-xs text-slate-400 hover:text-white px-2 py-1 cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="flex gap-4 mb-6">
